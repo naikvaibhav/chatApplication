@@ -212,7 +212,7 @@ let loginFunction = (req, res) => {
         delete userDetails.password;
         delete userDetails.createdOn;
         delete userDetails._id;
-        delete userDetails.__V;
+        delete userDetails.__v;
         resolve(userDetails);
       }
     });
@@ -232,7 +232,7 @@ let loginFunction = (req, res) => {
           reject(apiResponse);
         } else {
           let tokenDetails = {
-            token: token,
+            token: token.token,
             userDetails: userDetails
           };
           resolve(tokenDetails);
