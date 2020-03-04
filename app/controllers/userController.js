@@ -10,6 +10,7 @@ const tokenLib = require("./../libs/tokenLib");
 
 /* Models */
 const UserModel = mongoose.model("User");
+const AuthModel = mongoose.model("Auth");
 
 // start user signup function
 
@@ -78,7 +79,7 @@ let signUpFunction = (req, res) => {
               //     req.params.apiKey ||
               //     req.query.apiKey ||
               //     req.body.apiKey ||
-              //     req.header,
+              //     req.header('authToken),
               createdOn: time.now()
             });
             newUser.save((err, newUser) => {
@@ -172,7 +173,7 @@ let loginFunction = (req, res) => {
       UserModel.findOne({ email: req.body.email }).exec(
         (err, retrievedUserDetails) => {
           if (err) {
-            logger.error(err.message, "userController:findUser", 10);
+            logger.error(err.message, "userController:findUser()", 10);
             let apiResponse = response.generate(
               true,
               "Failed to Find User",
@@ -180,7 +181,17 @@ let loginFunction = (req, res) => {
               null
             );
             reject(apiResponse);
+          } else if (check.isEmpty(retrievedUserDetails)) {
+            logger.error("No user found", "userController:findUser()", 7);
+            let apiResponse = response.generate(
+              true,
+              "No user details found",
+              400,
+              null
+            );
+            reject(apiResponse);
           } else {
+            logger.info("User Found", "userController:findUser()", 10);
             resolve(retrievedUserDetails);
           }
         }
@@ -188,39 +199,71 @@ let loginFunction = (req, res) => {
     });
   }; //end findUser function
 
-  let comparePassword = userDetails => {
+  let comparePassword = retrievedUserDetails => {
     return new Promise((resolve, reject) => {
-      let passwordVerified = passwordLib.comparePassword(
+      passwordLib.comparePassword(
         req.body.password,
-        userDetails.password
+        retrievedUserDetails.password,
+        (err, isMatch) => {
+          if (err) {
+            logger.error(err.message, "userController:comparePassword", 10);
+            let apiResponse = response.generate(
+              true,
+              "Login Failed",
+              500,
+              null
+            );
+            reject(apiResponse);
+          } else if (isMatch) {
+            retrievedUserDetails = retrievedUserDetails.toObject();
+            delete retrievedUserDetails.password;
+            delete retrievedUserDetails.createdOn;
+            delete retrievedUserDetails._id;
+            delete retrievedUserDetails.__v;
+            resolve(retrievedUserDetails);
+          } else {
+            logger.info(
+              "Login Failed due to invalid password",
+              "userController: comparePassword",
+              10
+            );
+            let apiResponse = response.generate(
+              true,
+              "Wrong password, Login failed",
+              400,
+              null
+            );
+            reject(apiResponse);
+          }
+        }
       );
-      if (!passwordVerified) {
-        logger.error(
-          "Password match failed",
-          "userController:comparePassword",
-          10
-        );
-        let apiResponse = response.generate(
-          true,
-          "Password did not match",
-          400,
-          null
-        );
-        reject(apiResponse);
-      } else {
-        userDetails = userDetails.toObject();
-        delete userDetails.password;
-        delete userDetails.createdOn;
-        delete userDetails._id;
-        delete userDetails.__v;
-        resolve(userDetails);
-      }
+      // if (!passwordVerified) {
+      //   logger.error(
+      //     "Password match failed",
+      //     "userController:comparePassword",
+      //     10
+      //   );
+      //   let apiResponse = response.generate(
+      //     true,
+      //     "Password did not match",
+      //     400,
+      //     null
+      //   );
+      //   reject(apiResponse);
+      // } else {
+      //   retrievedUserDetails = retrievedUserDetails.toObject();
+      //   delete retrievedUserDetails.password;
+      //   delete retrievedUserDetails.createdOn;
+      //   delete retrievedUserDetails._id;
+      //   delete retrievedUserDetails.__v;
+      //   resolve(retrievedUserDetails);
+      // }
     });
   }; //end comparePassword function
 
   let generateToken = userDetails => {
     return new Promise((resolve, reject) => {
-      tokenLib.generateToken(userDetails, (err, token) => {
+      tokenLib.generateToken(userDetails, (err, tokenDetails) => {
         if (err) {
           logger.error(err.message, "userController:generateToken", 10);
           let apiResponse = response.generate(
@@ -231,36 +274,179 @@ let loginFunction = (req, res) => {
           );
           reject(apiResponse);
         } else {
-          let tokenDetails = {
-            token: token.token,
-            userDetails: userDetails
-          };
+          (tokenDetails.userId = userDetails.userId),
+            (tokenDetails.userDetails = userDetails);
           resolve(tokenDetails);
         }
       });
     });
   }; //end generateToken function
 
+  let saveToken = tokenDetails => {
+    return new Promise((resolve, reject) => {
+      AuthModel.findOne(
+        { userId: tokenDetails.userId },
+        (err, retrievedTokenDetails) => {
+          if (err) {
+            logger.error(err.message, "userControler:saveToken()", 10);
+            let apiResponse = response.generate(
+              true,
+              "Failed to generate token",
+              500,
+              null
+            );
+            reject(apiResponse);
+          } else if (check.isEmpty(retrievedTokenDetails)) {
+            let newAuthToken = new AuthModel({
+              userId: tokenDetails.userId,
+              authToken: tokenDetails.token,
+              tokenSecret: tokenDetails.tokenSecret,
+              tokenGenerationTime: time.now()
+            });
+            newAuthToken.save((err, newTokenDetails) => {
+              if (err) {
+                logger.error(err.message, "userController:saveToken", 10);
+                let apiResponse = response.generate(
+                  true,
+                  "err.message",
+                  500,
+                  null
+                );
+                reject(apiResponse);
+              } else {
+                let responseBody = {
+                  authToken: newTokenDetails.authToken,
+                  userDetails: tokenDetails.userDetails
+                };
+                resolve(responseBody);
+              }
+            });
+          } else {
+            (retrievedTokenDetails.authToken = tokenDetails.token),
+              (retrievedTokenDetails.tokenSecret = tokenDetails.tokenSecret),
+              (retrievedTokenDetails.tokenGenerationTime = time.now());
+            retrievedTokenDetails.save((err, newTokenDetails) => {
+              if (err) {
+                logger.error(err.message, "userController:saveToken", 10);
+                let apiResponse = response.generate(
+                  true,
+                  "Failed to generate token",
+                  500,
+                  null
+                );
+                reject(apiResponse);
+              } else {
+                let responseBody = {
+                  authToken: newTokenDetails.authToken,
+                  userDetails: tokenDetails.userDetails
+                };
+                resolve(responseBody);
+              }
+            });
+          }
+        }
+      );
+    });
+  }; // end saveToken function
+
   validateUserInput(req, res)
     .then(findUser)
     .then(comparePassword)
     .then(generateToken)
+    .then(saveToken)
     .then(resolve => {
-      let apiResponse = response.generate(false, "Login success", 200, resolve);
+      let apiResponse = response.generate(
+        false,
+        "Login successful",
+        200,
+        resolve
+      );
       res.send(apiResponse);
     })
     .catch(err => {
+      console.log("errhandler");
       console.log(err);
+      res.status(err.status);
       res.send(err);
     });
 };
 
 // end of the login function
 
-let logout = (req, res) => {}; // end of the logout function.
+let getAllUsers = (req, res) => {
+  UserModel.find()
+    .select("-password  -__v  -_id")
+    .lean()
+    .exec((err, usersFound) => {
+      if (err) {
+        logger.error(err.message, "userController:getAllUsers", 10);
+        let apiResponse = response.generate(
+          true,
+          `error occured: ${err.message}`,
+          500,
+          null
+        );
+        res.send(apiResponse);
+      } else if (check.isEmpty(usersFound)) {
+        logger.error("No users found", "userController:getAllUSers", 10);
+        let apiResponse = response.generate(
+          true,
+          "No users found in the database",
+          404,
+          null
+        );
+        res.send(apiResponse);
+      } else {
+        logger.info(
+          "All the users present in the DB",
+          "userController:getAllUsers",
+          10
+        );
+        let apiResponse = response.generate(
+          false,
+          "All the users present in the DB",
+          200,
+          usersFound
+        );
+        res.send(apiResponse);
+      }
+    });
+}; //end getAllUsers function
+
+let logout = (req, res) => {
+  AuthModel.findOneAndRemove({ userId: req.user.userId }, (err, result) => {
+    if (err) {
+      logger.error(err.message, "userController: logout", 10);
+      let apiResponse = response.generate(
+        true,
+        `error ocuured: ${err.message}`,
+        500,
+        null
+      );
+      res.send(apiResponse);
+    } else if (check.isEmpty(result)) {
+      let apiResponse = response.generate(
+        true,
+        "Already logged out or invalid user",
+        404,
+        null
+      );
+      res.send(apiResponse);
+    } else {
+      let apiResponse = response.generate(
+        false,
+        "Logged out successfully",
+        200,
+        null
+      );
+      res.send(apiResponse);
+    }
+  });
+}; // end of the logout function.
 
 module.exports = {
   signUpFunction: signUpFunction,
   loginFunction: loginFunction,
+  getAllUsers: getAllUsers,
   logout: logout
 }; // end exports

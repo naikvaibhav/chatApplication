@@ -8,12 +8,20 @@ const hashPassword = myPlaintextPassword => {
   return hash;
 };
 
-const comparePassword = (myPlaintextPassword, hashedPassword) => {
-  const verifiedPassword = bcrypt.compareSync(
-    myPlaintextPassword,
-    hashedPassword
-  );
-  return verifiedPassword;
+const comparePassword = (myPlaintextPassword, hashedPassword, cb) => {
+  bcrypt.compare(myPlaintextPassword, hashedPassword, (err, res) => {
+    if (err) {
+      logger.error(err.message, "Comparison error", 5);
+      cb(err, null);
+    } else {
+      cb(null, res);
+    }
+  });
+  // const verifiedPassword = bcrypt.compareSync(
+  //   myPlaintextPassword,
+  //   hashedPassword
+  // );
+  // return verifiedPassword;
 };
 
 module.exports = {
