@@ -5,9 +5,13 @@ const logger = require("./loggerLib");
 const events = require("events");
 const eventEmitter = new events.EventEmitter();
 
+//model
+const Chat = mongoose.model("Chat");
+
 const tokenLib = require("./tokenLib");
 const check = require("./checkLib");
 const response = require("./responseLib");
+// const redisLib = require("./redisLib");
 
 let setServer = server => {
   let allOnlineUsers = [];
@@ -39,6 +43,37 @@ let setServer = server => {
           console.log(`${fullName} is online`);
           //socket.emit(currentUser.userId, "You are online");
 
+          let key = currentUser.userId;
+          let value = fullName;
+
+          // let setUserOnline = redisLib.setANewOnlineUserInHash(
+          //   "onlineUsers",
+          //   key,
+          //   value,
+          //   (err, result) => {
+          //     if (err) {
+          //       console.log("some error occured");
+          //     } else {
+          //       //getting online users list
+
+          //       redisLib.getAllUsersInaHash("onlineUsers", (err, result) => {
+          //         console.log("---- inside getAllUsersInAHash function ---");
+          //         if (err) {
+          //           console.log(err);
+          //         } else {
+          //           console.log(`${fullName} is online`);
+          //           //setting room name
+          //           socket.room = "chat";
+          //           socket.join(socket.room);
+          //           socket
+          //             .to(socket.room)
+          //             .broadcast.emit("online-user-list", allOnlineUsers);
+          //         }
+          //       });
+          //     }
+          //   }
+          // );
+
           let userObj = {
             userId: currentUser.userId,
             name: currentUser.firstName + " " + currentUser.lastName
@@ -57,9 +92,47 @@ let setServer = server => {
       });
     }); //end listening setUser
 
+    eventEmitter.on("save-chat", chatData => {
+      console.log("chatData", chatData);
+      if (!check.isEmpty(chatData)) {
+        let newChat = new Chat({
+          chatId: chatData.chatId,
+          senderName: chatData.senderName,
+          senderId: chatData.senderId,
+          receiverName: chatData.receiverName,
+          receiverId: chatData.receiverId,
+          message: chatData.message,
+          chatRoom: chatData.chatRoom
+        });
+
+        newChat.save((err, chat) => {
+          if (err) {
+            logger.error(
+              err.message,
+              "Unable to save the chat message in DB",
+              10
+            );
+          } else {
+            logger.info(
+              "Chat message saved successfullly in DB",
+              "socketLib",
+              10
+            );
+          }
+        });
+      }
+    });
+
     socket.on("chat-msg", data => {
       console.log("socket chat-msg called");
       console.log(data);
+      data["chatRoom"] = socket.room;
+      data["chatId"] = shortid.generate();
+      //console.log("data", data);
+      setTimeout(() => {
+        eventEmitter.emit("save-chat", data);
+      }, 3000);
+
       io.emit(data.receiverId, data);
     });
 
@@ -73,6 +146,19 @@ let setServer = server => {
       //unsubscribe the user from this own channel
       console.log("user is disconnected");
       console.log(socket.userId);
+
+      // if(socket.userId){
+      //   redisLib.deleteUserFromHash('onlineUsers', socket.userId)
+      //   redisLib.getAllUsersInaHash('onlineUsers',(err,result)=>{
+      //     if(err){
+      //       console.log(err)
+      //     }else {
+      //       socket.leave(socket.room)
+      //       socket.to(socket.room).broadcast.emit('online-user-list',result)
+      //     }
+      //   })
+      // }
+
       let removeIndex = allOnlineUsers
         .map(user => {
           return user.userId;

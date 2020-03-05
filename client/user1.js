@@ -1,6 +1,6 @@
 const socket = io("http://localhost:3000");
 const authToken =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqd3RpZCI6Im5aaC1BWGJPIiwiaWF0IjoxNTgzMzIzODg2OTg1LCJleHAiOjE1ODMzMjc0ODYsInN1YiI6ImF1dGhUb2tlbiIsImlzcyI6InZhaWJoYXYiLCJkYXRhIjp7Im1vYmlsZU51bWJlciI6OTQ4Mjc4NTcyMCwiZW1haWwiOiJ2aW5heWFrbmFpazE5NjJAZ21haWwuY29tIiwibGFzdE5hbWUiOiJOYWlrIiwiZmlyc3ROYW1lIjoiVmluYXlhayIsInVzZXJJZCI6Ii1xWVF2OGFEIn19.Urvtokg0uqOa7mBzi34Do3nAeNhYwIfsF8mlhHBpG8E";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqd3RpZCI6Ik1sMTJGS2pTIiwiaWF0IjoxNTgzMzg4NTQzMDg5LCJleHAiOjE1ODMzOTIxNDMsInN1YiI6ImF1dGhUb2tlbiIsImlzcyI6InZhaWJoYXYiLCJkYXRhIjp7Im1vYmlsZU51bWJlciI6OTQ4Mjc4NTcyMCwiZW1haWwiOiJ2aW5heWFrbmFpazE5NjJAZ21haWwuY29tIiwibGFzdE5hbWUiOiJOYWlrIiwiZmlyc3ROYW1lIjoiVmluYXlhayIsInVzZXJJZCI6Ii1xWVF2OGFEIn19.aSG1TFbNM52rGDIRkevGzEb2dwEs1c-OzPc9b6btoU4";
 const userId = "-qYQv8aD";
 
 let chatMessage = {
@@ -31,6 +31,7 @@ let chatSocket = () => {
 
   $("#send").on("click", () => {
     let messageText = $("#messageToSend").val();
+    console.log(messageText);
     chatMessage.message = messageText;
     socket.emit("chat-msg", chatMessage);
   });
